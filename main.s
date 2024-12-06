@@ -1,17 +1,35 @@
 .data 
   memory: .zero 1024
   formatAdd: .asciz "%d: (%d, %d)\n"
+  formatScanf: .asciz "%d: (%d, %d)\n"
+  operations: .space 4
+  descriptor: .space 4
+  blocks: .space 4
 
 .text
 .global main 
 
 main:
-  movl $5, %eax
-  movl $3, %ebx
-  movl $0, %ecx    # pozitie de start blocks
+  pushl $operations
+  pushl $formatScanf
+  call scanf
+  popl %ebx
+  popl %ebx
 
-  pushl %ebx
-  pushl %eax
+  pushl $descriptor
+  pushl $formatScanf 
+  call scanf
+  popl %ebx
+  popl %ebx
+
+  pushl $blocks
+  pushl $formatScanf
+  call scanf
+  popl %ebx
+  popl %ebx
+
+  pushl blocks
+  pushl descriptor
   call add_file
   popl %ebx
   popl %ebx

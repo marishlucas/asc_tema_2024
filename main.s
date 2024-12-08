@@ -9,6 +9,8 @@
   size: .space 4
   start_pos: .space 4
   counter: .space 4
+  block_size: .long 8
+  remainder: .space 4
 
 .text
 .global main 
@@ -51,6 +53,31 @@ add_files_loop:
   call scanf
   popl %ebx
   popl %ebx
+
+  movl size, %eax
+  movl $0, %edx
+  divl block_size
+
+  movl %edx, remainder
+  cmpl $0, remainder
+  je no_remainder
+  incl %eax
+
+no_remainder:
+  cmpl $2, %eax
+  jge size_ok
+  movl $2, %eax
+
+size_ok:
+  movl %eax, size
+  
+  pushl size
+  pushl descriptor
+  call add_file
+  addl $8, %esp
+  
+  incl counter
+  jmp add_files_loop
 
   pushl size
   pushl descriptor

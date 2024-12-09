@@ -5,6 +5,7 @@
   operations: .space 4
   descriptor: .space 4
   blocks: .space 4
+  blockSize: .long 8
 
 .text
 .global main 
@@ -28,6 +29,12 @@ main:
   popl %ebx
   popl %ebx
 
+  movl blocks, %eax
+  movl $0, %edx
+  divl blockSize
+
+  movl %eax, blocks
+
   pushl blocks
   pushl descriptor
   call add_file
@@ -38,7 +45,6 @@ main:
 add_file: 
   pushl %ebp
   movl %esp, %ebp
-  # la 4(%ebp) se afla adresa de ret
   movl 8(%ebp), %edx
   movl 12(%ebp), %ecx
   movl $0, %edi
@@ -47,14 +53,12 @@ add_file:
 storing_loop:
   cmpl %ecx, %edi
   jge storing_end
-  # descriptori de la 0-255 => putem folosi dl din edx
-  movb %dl, (%esi, %edi, 1)   #base + index * scale
+  movb %dl, (%esi, %edi, 1)
   incl %edi
   jmp storing_loop
   
 storing_end:
   pushl %ecx 
-  decl (%esp)
   pushl $0
   pushl %edx
   pushl $formatAdd

@@ -1,6 +1,5 @@
 /*
 
-TODO: add remainder conversion for partial files
 
   */
 
@@ -13,8 +12,8 @@ TODO: add remainder conversion for partial files
   blocks: .space 4
   blockSize: .long 8
   index: .long 0
-  nr_files: .space 4     
-  counter: .long 0       
+  nr_files: .space 4
+  counter: .long 0
 
 .text
 .global main 
@@ -52,6 +51,15 @@ add_files_loop:
   movl blocks, %eax
   movl $0, %edx
   divl blockSize
+
+  cmpl $0, %edx
+  je no_remainder
+
+  incl %eax
+
+  no_remainder:
+    movl %eax, blocks
+
   movl %eax, blocks
 
   pushl blocks

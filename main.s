@@ -10,6 +10,7 @@
   formatScanf: .asciz "%ld"
   formatError: .asciz "%d: (0, 0)\n"
   operations: .space 4
+  remaining_ops: .space 4
   descriptor: .space 4
   blocks: .space 4
   blockSize: .long 8
@@ -26,15 +27,115 @@ main:
   call scanf
   popl %ebx
   popl %ebx
-  cmpl $0, %eax
-  jle exit
+  
+  movl operations, %eax
+  movl %eax, remaining_ops
 
 process_ops:
+  cmpl $0, remaining_ops
+  jle exit
+
+  pushl $operations
+  pushl $formatScanf
+  call scanf
+  popl %ebx
+  popl %ebx
+
   cmpl $1, operations
   je do_add
   cmpl $2, operations
   je do_get
-  jmp exit
+  cmpl $3, operations
+  je do_delete
+  jmp read_next_op
+
+do_delete:
+  pushl $descriptor 
+  pushl $formatScanf
+  call scanf
+  popl %ebx
+  popl %ebx
+
+  pushl descriptor
+  call delete_file
+  addl $4, %esp
+  jmp read_next_op
+
+delete_file:
+  pushl %ebp
+  movl %esp, %ebp
+  pushl %ebx
+  pushl %edi
+  pushl %esi
+
+  movl 8(%ebp), %edx
+  movl $0, %edi
+  movl $-1, %esi
+
+delete_loop:
+  cmpl $1024, %edi
+  jge delete_done
+
+  lea memory, %ebx
+  movb (%ebx, %edi, 1), %al
+  cmpb %dl, %al
+  jne next_pos
+  
+  movb $0, (%ebx, %edi, 1)
+  cmpl $-1, %esi
+  jne skip_start
+  movl %edi, %esi
+
+skip_start:
+  incl %edi
+  jmp delete_loop
+
+next_pos:
+  cmpl $-1, %esi
+  je skip_print
+  
+  decl %edi
+  pushl %edi
+  pushl %esi 
+  pushl %edx
+  pushl $formatAdd
+  call printf
+  
+  pushl $0
+  call fflush
+  popl %ebx
+  
+  addl $16, %esp
+  movl $-1, %esi
+
+skip_print:
+  incl %edi
+  jmp delete_loop
+
+delete_done:
+  cmpl $-1, %esi
+  je delete_exit
+  
+  decl %edi
+  pushl %edi
+  pushl %esi
+  pushl %edx
+  pushl $formatAdd
+  call printf
+  
+  pushl $0 
+  call fflush
+  popl %ebx
+  
+  addl $16, %esp
+
+delete_exit:
+  popl %esi
+  popl %edi
+  popl %ebx
+  movl %ebp, %esp
+  popl %ebp
+  ret
 
 do_add:
   pushl $nr_files
@@ -42,8 +143,6 @@ do_add:
   call scanf
   popl %ebx
   popl %ebx
-  cmpl $0, %eax
-  jle exit
   
   movl $0, counter
 
@@ -57,16 +156,12 @@ add_files_loop:
   call scanf
   popl %ebx
   popl %ebx
-  cmpl $0, %eax
-  jle exit
 
   pushl $blocks
   pushl $formatScanf
   call scanf
   popl %ebx
   popl %ebx
-  cmpl $0, %eax
-  jle exit
 
   movl blocks, %eax
   movl $0, %edx
@@ -97,6 +192,11 @@ print_error:
   pushl descriptor
   pushl $formatAdd
   call printf
+  
+  pushl $0
+  call fflush
+  popl %ebx
+  
   addl $16, %esp
 
 continue:
@@ -109,21 +209,14 @@ do_get:
   call scanf
   popl %ebx
   popl %ebx
-  cmpl $0, %eax
-  jle exit
 
   pushl descriptor
   call get_file
   addl $4, %esp
+  jmp read_next_op
 
 read_next_op:
-  pushl $operations
-  pushl $formatScanf
-  call scanf
-  popl %ebx
-  popl %ebx
-  cmpl $0, %eax
-  jle exit
+  decl remaining_ops
   jmp process_ops
 
 find_position:
@@ -216,6 +309,11 @@ next_byte:
   pushl %esi
   pushl $formatGet
   call printf
+  
+  pushl $0
+  call fflush
+  popl %ebx
+  
   addl $12, %esp
   jmp get_done
 
@@ -231,6 +329,11 @@ not_found:
   pushl %esi
   pushl $formatGet
   call printf
+  
+  pushl $0
+  call fflush
+  popl %ebx
+  
   addl $12, %esp
   jmp get_done
 
@@ -239,6 +342,11 @@ print_zero:
   pushl $0
   pushl $formatGet
   call printf
+  
+  pushl $0
+  call fflush
+  popl %ebx
+  
   addl $12, %esp
 
 get_done:
@@ -272,6 +380,11 @@ storing_loop:
   pushl %edx
   pushl $formatAdd
   call printf
+  
+  pushl $0
+  call fflush
+  popl %ebx
+  
   addl $16, %esp
 
   incl %edi

@@ -6,6 +6,7 @@
 .data 
   memory: .zero 1024
   formatAdd: .asciz "%d: (%d, %d)\n"
+  formatGet: .asciz "(%d, %d)\n"
   formatScanf: .asciz "%ld"
   formatError: .asciz "%d: (0, 0)\n"
   operations: .space 4
@@ -25,29 +26,47 @@ main:
   call scanf
   popl %ebx
   popl %ebx
+  cmpl $0, %eax
+  jle exit
 
+process_ops:
+  cmpl $1, operations
+  je do_add
+  cmpl $2, operations
+  je do_get
+  jmp exit
+
+do_add:
   pushl $nr_files
   pushl $formatScanf
   call scanf
   popl %ebx
   popl %ebx
+  cmpl $0, %eax
+  jle exit
+  
+  movl $0, counter
 
 add_files_loop:
   movl counter, %eax
   cmpl nr_files, %eax
-  jge exit
+  jge read_next_op
 
   pushl $descriptor
   pushl $formatScanf
   call scanf
   popl %ebx
   popl %ebx
+  cmpl $0, %eax
+  jle exit
 
   pushl $blocks
   pushl $formatScanf
   call scanf
   popl %ebx
   popl %ebx
+  cmpl $0, %eax
+  jle exit
 
   movl blocks, %eax
   movl $0, %edx
@@ -55,9 +74,8 @@ add_files_loop:
   cmpl $0, %edx
   je no_remainder
   incl %eax
-
-  no_remainder:
-    movl %eax, blocks
+no_remainder:
+  movl %eax, blocks
 
   pushl blocks
   call find_position
@@ -84,6 +102,29 @@ print_error:
 continue:
   incl counter
   jmp add_files_loop
+
+do_get:
+  pushl $descriptor
+  pushl $formatScanf
+  call scanf
+  popl %ebx
+  popl %ebx
+  cmpl $0, %eax
+  jle exit
+
+  pushl descriptor
+  call get_file
+  addl $4, %esp
+
+read_next_op:
+  pushl $operations
+  pushl $formatScanf
+  call scanf
+  popl %ebx
+  popl %ebx
+  cmpl $0, %eax
+  jle exit
+  jmp process_ops
 
 find_position:
   pushl %ebp
@@ -133,6 +174,76 @@ no_position:
 find_done:
   popl %esi
   popl %edi
+  popl %ebx
+  movl %ebp, %esp
+  popl %ebp
+  ret
+
+get_file:
+  pushl %ebp
+  movl %esp, %ebp
+  pushl %ebx
+  pushl %edi
+  pushl %esi
+
+  movl 8(%ebp), %edx
+  movl $0, %edi
+  movl $-1, %esi
+
+search_loop:
+  cmpl $1024, %edi
+  jge not_found
+
+  lea memory, %ebx
+  movb (%ebx, %edi, 1), %al
+  cmpb %dl, %al
+  jne next_byte
+
+  cmpl $-1, %esi
+  jne continue_interval
+  movl %edi, %esi
+
+continue_interval:
+  incl %edi
+  jmp search_loop
+
+next_byte:
+  cmpl $-1, %esi
+  je no_interval
+  
+  decl %edi
+  pushl %edi
+  pushl %esi
+  pushl $formatGet
+  call printf
+  addl $12, %esp
+  jmp get_done
+
+no_interval:
+  incl %edi
+  jmp search_loop
+
+not_found:
+  cmpl $-1, %esi
+  je print_zero
+  decl %edi
+  pushl %edi
+  pushl %esi
+  pushl $formatGet
+  call printf
+  addl $12, %esp
+  jmp get_done
+
+print_zero:
+  pushl $0
+  pushl $0
+  pushl $formatGet
+  call printf
+  addl $12, %esp
+
+get_done:
+  popl %esi
+  popl %edi  
   popl %ebx
   movl %ebp, %esp
   popl %ebp

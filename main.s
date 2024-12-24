@@ -70,66 +70,90 @@ delete_file:
 
   movl 8(%ebp), %edx
   movl $0, %edi
-  movl $-1, %esi
 
-delete_loop:
+delete_pass:
   cmpl $1024, %edi
-  jge delete_done
+  jge print_remaining
 
   lea memory, %ebx
   movb (%ebx, %edi, 1), %al
   cmpb %dl, %al
-  jne next_pos
-  
+  jne delete_continue
+
   movb $0, (%ebx, %edi, 1)
-  cmpl $-1, %esi
-  jne skip_start
-  movl %edi, %esi
 
-skip_start:
+delete_continue:
   incl %edi
-  jmp delete_loop
+  jmp delete_pass
 
-next_pos:
-  cmpl $-1, %esi
-  je skip_print
-  
-  decl %edi
-  pushl %edi
-  pushl %esi 
-  pushl %edx
-  pushl $formatAdd
-  call printf
-  
-  pushl $0
-  call fflush
-  popl %ebx
-  
-  addl $16, %esp
+print_remaining:
+  movl $0, %edi
   movl $-1, %esi
+  movl $0, %edx
 
-skip_print:
-  incl %edi
-  jmp delete_loop
+delete_scan_loop:
+  cmpl $1024, %edi
+  jge delete_check_final
 
-delete_done:
+  lea memory, %ebx
+  movb (%ebx, %edi, 1), %al
+
   cmpl $-1, %esi
-  je delete_exit
-  
+  je delete_check_new
+
+  cmpb %dl, %al
+  je delete_continue_interval
+
   decl %edi
   pushl %edi
   pushl %esi
-  pushl %edx
+  movzbl %dl, %eax
+  pushl %eax
   pushl $formatAdd
   call printf
-  
-  pushl $0 
+
+  pushl $0
   call fflush
   popl %ebx
-  
+
   addl $16, %esp
 
-delete_exit:
+  movl $-1, %esi
+  jmp delete_scan_continue
+delete_check_new:
+  cmpb $0, %al
+  je delete_scan_continue
+
+  movl %edi, %esi
+  movb %al, %dl
+
+delete_continue_interval:
+  incl %edi
+  jmp delete_scan_loop
+
+delete_scan_continue:
+  incl %edi
+  jmp delete_scan_loop
+
+delete_check_final:
+  cmpl $-1, %esi
+  je delete_done
+
+  decl %edi
+  pushl %edi
+  pushl %esi
+  movzbl %dl, %eax
+  pushl %eax
+  pushl $formatAdd
+  call printf
+
+  pushl $0
+  call fflush
+  popl %ebx
+    
+  addl $16, %esp
+
+delete_done:
   popl %esi
   popl %edi
   popl %ebx
@@ -283,26 +307,26 @@ get_file:
   movl $0, %edi
   movl $-1, %esi
 
-search_loop:
+get_search_loop:
   cmpl $1024, %edi
-  jge not_found
+  jge get_not_found
 
   lea memory, %ebx
   movb (%ebx, %edi, 1), %al
   cmpb %dl, %al
-  jne next_byte
+  jne get_next_byte
 
   cmpl $-1, %esi
-  jne continue_interval
+  jne get_continue_interval
   movl %edi, %esi
 
-continue_interval:
+get_continue_interval:
   incl %edi
-  jmp search_loop
+  jmp get_search_loop
 
-next_byte:
+get_next_byte:
   cmpl $-1, %esi
-  je no_interval
+  je get_no_interval
   
   decl %edi
   pushl %edi
@@ -317,13 +341,13 @@ next_byte:
   addl $12, %esp
   jmp get_done
 
-no_interval:
+get_no_interval:
   incl %edi
-  jmp search_loop
+  jmp get_search_loop
 
-not_found:
+get_not_found:
   cmpl $-1, %esi
-  je print_zero
+  je get_print_zero
   decl %edi
   pushl %edi
   pushl %esi
@@ -337,7 +361,7 @@ not_found:
   addl $12, %esp
   jmp get_done
 
-print_zero:
+get_print_zero:
   pushl $0
   pushl $0
   pushl $formatGet

@@ -5,6 +5,7 @@
 
 .data 
   memory: .zero 1024
+  temp: .zero 1024
   formatAdd: .asciz "%d: (%d, %d)\n"
   formatGet: .asciz "(%d, %d)\n"
   formatScanf: .asciz "%ld"
@@ -17,6 +18,7 @@
   index: .space 4
   nr_files: .space 4
   counter: .long 0
+  current_pos: .long 0
 
 .text
 .global main 
@@ -47,7 +49,183 @@ process_ops:
   je do_get
   cmpl $3, operations
   je do_delete
+  cmpl $4, operations
+  je do_defrag
   jmp read_next_op
+
+do_defrag:
+  call defragment
+  jmp read_next_op
+
+defragment:
+  pushl %ebp
+  movl %esp, %ebp
+  pushl %ebx
+  pushl %edi
+  pushl %esi
+
+  movl $0, %edi
+copy_to_temp:
+  cmpl $1024, %edi
+  jge copy_done
+  movb memory(,%edi,1), %al
+  movb %al, temp(,%edi,1)
+  movb $0, memory(,%edi,1)
+  incl %edi
+  jmp copy_to_temp
+
+copy_done:
+
+  movl $0, current_pos
+  movl $0, %edi
+  movl $-1, %esi
+  movl $0, %ebx
+
+scan_loop:
+  cmpl $1024, %edi
+  jge done_scan
+  
+  movb temp(,%edi,1), %al
+  
+  cmpl $-1, %esi
+  jne check_current_file
+  
+  cmpb $0, %al
+  je next_byte
+  
+  movl %edi, %esi
+  movb %al, %bl
+  jmp next_byte
+  
+check_current_file:
+  cmpb %bl, %al
+  je next_byte
+  
+  pushl %edi
+  decl %edi
+  
+  movl %edi, %eax
+  subl %esi, %eax
+  incl %eax
+  
+  pushl %eax
+  
+  movl %esi, %ecx
+  movl current_pos, %edx
+copy_file:
+  cmpl %edi, %ecx
+  jg copy_file_done
+  
+  movb temp(,%ecx,1), %al
+  movb %al, memory(,%edx,1)
+  incl %ecx
+  incl %edx
+  jmp copy_file
+  
+copy_file_done:
+  movl current_pos, %ecx
+  popl %eax
+  pushl %eax
+  
+  movl %ecx, %edx
+  addl %eax, %edx
+  decl %edx
+  
+  pushl %edx
+  pushl %ecx
+  movzbl %bl, %eax
+  pushl %eax
+  pushl $formatAdd
+  call printf
+  
+  pushl $0
+  call fflush
+  popl %eax
+  
+  addl $16, %esp
+  
+  popl %eax
+  addl %eax, current_pos
+  
+  movl $-1, %esi
+  
+  popl %edi
+  decl %edi
+  
+next_byte:
+  incl %edi
+  jmp scan_loop
+  
+done_scan:
+  cmpl $-1, %esi
+  je finish_defrag
+  
+  decl %edi
+  
+  movl %edi, %eax
+  subl %esi, %eax
+  incl %eax
+  pushl %eax
+  
+  movl %esi, %ecx
+  movl current_pos, %edx
+
+copy_last:
+  cmpl %edi, %ecx
+  jg copy_last_done
+  
+  movb temp(,%ecx,1), %al
+  movb %al, memory(,%edx,1)
+  incl %ecx
+  incl %edx
+  jmp copy_last
+  
+copy_last_done:
+  movl current_pos, %ecx
+  popl %eax
+  
+  movl %ecx, %edx
+  addl %eax, %edx
+  decl %edx
+  
+  pushl %edx
+  pushl %ecx
+  movzbl %bl, %eax
+  pushl %eax
+  pushl $formatAdd
+  call printf
+  
+  pushl $0
+  call fflush
+  popl %eax
+  
+  addl $16, %esp
+
+finish_defrag:
+  popl %esi
+  popl %edi
+  popl %ebx
+  movl %ebp, %esp
+  popl %ebp
+  ret
+
+defrag_finish:
+  movl current_pos, %edi
+
+clear_remaining:
+  cmpl $1024, %edi
+  jge defrag_done
+  movb $0, memory(,%edi,1)
+  incl %edi
+  jmp clear_remaining
+
+defrag_done:
+  popl %esi
+  popl %edi
+  popl %ebx
+  movl %ebp, %esp
+  popl %ebp
+  ret
 
 do_delete:
   pushl $descriptor 
@@ -70,18 +248,18 @@ delete_file:
 
   movl 8(%ebp), %edx
   movl $0, %edi
-
+    
 delete_pass:
   cmpl $1024, %edi
   jge print_remaining
-
+    
   lea memory, %ebx
   movb (%ebx, %edi, 1), %al
   cmpb %dl, %al
   jne delete_continue
-
+    
   movb $0, (%ebx, %edi, 1)
-
+    
 delete_continue:
   incl %edi
   jmp delete_pass
@@ -90,20 +268,20 @@ print_remaining:
   movl $0, %edi
   movl $-1, %esi
   movl $0, %edx
-
+    
 delete_scan_loop:
   cmpl $1024, %edi
   jge delete_check_final
-
+    
   lea memory, %ebx
   movb (%ebx, %edi, 1), %al
-
+    
   cmpl $-1, %esi
   je delete_check_new
-
+    
   cmpb %dl, %al
   je delete_continue_interval
-
+    
   decl %edi
   pushl %edi
   pushl %esi
@@ -111,34 +289,35 @@ delete_scan_loop:
   pushl %eax
   pushl $formatAdd
   call printf
-
+  
   pushl $0
   call fflush
   popl %ebx
-
+  
   addl $16, %esp
-
+    
   movl $-1, %esi
   jmp delete_scan_continue
+    
 delete_check_new:
   cmpb $0, %al
   je delete_scan_continue
-
+    
   movl %edi, %esi
   movb %al, %dl
-
+    
 delete_continue_interval:
   incl %edi
   jmp delete_scan_loop
-
+    
 delete_scan_continue:
   incl %edi
   jmp delete_scan_loop
-
+    
 delete_check_final:
   cmpl $-1, %esi
   je delete_done
-
+    
   decl %edi
   pushl %edi
   pushl %esi
@@ -146,11 +325,11 @@ delete_check_final:
   pushl %eax
   pushl $formatAdd
   call printf
-
+  
   pushl $0
   call fflush
   popl %ebx
-    
+  
   addl $16, %esp
 
 delete_done:

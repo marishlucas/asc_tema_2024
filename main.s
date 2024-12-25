@@ -65,6 +65,7 @@ defragment:
   pushl %esi
 
   movl $0, %edi
+
 copy_to_temp:
   cmpl $1024, %edi
   jge copy_done
@@ -112,6 +113,7 @@ check_current_file:
   
   movl %esi, %ecx
   movl current_pos, %edx
+
 copy_file:
   cmpl %edi, %ecx
   jg copy_file_done
@@ -372,6 +374,7 @@ add_files_loop:
   cmpl $0, %edx
   je no_remainder
   incl %eax
+
 no_remainder:
   movl %eax, blocks
 

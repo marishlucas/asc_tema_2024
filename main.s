@@ -1,11 +1,6 @@
-/*
-
-
-  */
-
 .data 
-  memory: .zero 1024
-  temp: .zero 1024
+  memory: .zero 8388608  # 8MB = 8 * 1024 * 1024 bytes
+  temp: .zero 8388608
   formatAdd: .asciz "%d: (%d, %d)\n"
   formatGet: .asciz "(%d, %d)\n"
   formatScanf: .asciz "%ld"
@@ -14,11 +9,13 @@
   remaining_ops: .space 4
   descriptor: .space 4
   blocks: .space 4
-  blockSize: .long 8
+  blockSize: .long 8192
   index: .space 4
   nr_files: .space 4
   counter: .long 0
   current_pos: .long 0
+  memsize: .long 8388608
+  min_blocks: .long 2
 
 .text
 .global main 
@@ -65,9 +62,8 @@ defragment:
   pushl %esi
 
   movl $0, %edi
-
 copy_to_temp:
-  cmpl $1024, %edi
+  cmpl memsize, %edi
   jge copy_done
   movb memory(,%edi,1), %al
   movb %al, temp(,%edi,1)
@@ -76,14 +72,13 @@ copy_to_temp:
   jmp copy_to_temp
 
 copy_done:
-
   movl $0, current_pos
   movl $0, %edi
   movl $-1, %esi
   movl $0, %ebx
 
 scan_loop:
-  cmpl $1024, %edi
+  cmpl memsize, %edi
   jge done_scan
   
   movb temp(,%edi,1), %al
@@ -204,18 +199,10 @@ copy_last_done:
   addl $16, %esp
 
 finish_defrag:
-  popl %esi
-  popl %edi
-  popl %ebx
-  movl %ebp, %esp
-  popl %ebp
-  ret
-
-defrag_finish:
   movl current_pos, %edi
 
 clear_remaining:
-  cmpl $1024, %edi
+  cmpl memsize, %edi
   jge defrag_done
   movb $0, memory(,%edi,1)
   incl %edi
@@ -252,7 +239,7 @@ delete_file:
   movl $0, %edi
     
 delete_pass:
-  cmpl $1024, %edi
+  cmpl memsize, %edi
   jge print_remaining
     
   lea memory, %ebx
@@ -272,7 +259,7 @@ print_remaining:
   movl $0, %edx
     
 delete_scan_loop:
-  cmpl $1024, %edi
+  cmpl memsize, %edi
   jge delete_check_final
     
   lea memory, %ebx
@@ -370,12 +357,15 @@ add_files_loop:
 
   movl blocks, %eax
   movl $0, %edx
-  divl blockSize
+  movl $8, %ecx
+  divl %ecx
   cmpl $0, %edx
-  je no_remainder
+  je check_min_blocks
   incl %eax
 
-no_remainder:
+check_min_blocks:
+  cmpl $2, %eax
+  jl print_error
   movl %eax, blocks
 
   pushl blocks
@@ -490,7 +480,7 @@ get_file:
   movl $-1, %esi
 
 get_search_loop:
-  cmpl $1024, %edi
+  cmpl memsize, %edi
   jge get_not_found
 
   lea memory, %ebx
